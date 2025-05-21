@@ -17,9 +17,12 @@
  * DataBuffer allows storing and retrieving objects in byte format using
  * stream-like operators. It provides a type-safe way to serialize objects
  * into a binary buffer and later deserialize them.
+ * 
+ * @note Exception handling: All exceptions are propagated to the caller.
+ * Reading operations will throw if there is insufficient data in the buffer.
  */
-
-class DataBuffer {
+class DataBuffer
+{
     private:
 
         /** Internal byte buffer */
@@ -29,7 +32,7 @@ class DataBuffer {
         size_t m_readPosition;
 
     public:
-
+    
         /**
          * @brief Default constructor.
          *
@@ -71,6 +74,7 @@ class DataBuffer {
          * @param buffer Buffer to store the object in
          * @param data Object to serialize
          * @return Reference to the buffer for operator chaining
+         * @throws std::bad_alloc if memory allocation fails
          */
         template<typename T>
         friend DataBuffer& operator<<(DataBuffer& buffer, const T& data);
@@ -94,12 +98,14 @@ class DataBuffer {
 // Template implementations must be in the header file
 
 template<typename T>
-DataBuffer& operator<<(DataBuffer& buffer, const T& data) {
+DataBuffer& operator<<(DataBuffer& buffer, const T& data)
+{
     // Get byte representation of the data
     const uint8_t* bytePtr = reinterpret_cast<const uint8_t*>(&data);
     
     // Append bytes to the buffer
-    for (size_t i = 0; i < sizeof(T); ++i) {
+    for (size_t i = 0; i < sizeof(T); ++i)
+    {
         buffer.m_buffer.push_back(bytePtr[i]);
     }
     
@@ -107,14 +113,17 @@ DataBuffer& operator<<(DataBuffer& buffer, const T& data) {
 }
 
 template<typename T>
-DataBuffer& operator>>(DataBuffer& buffer, T& data) {
+DataBuffer& operator>>(DataBuffer& buffer, T& data)
+{
     // Check if there's enough data in the buffer
-    if (buffer.m_readPosition + sizeof(T) > buffer.m_buffer.size()) {
+    if (buffer.m_readPosition + sizeof(T) > buffer.m_buffer.size())
+    {
         throw std::runtime_error("Buffer overflow: not enough data to read");
     }
     
     // Copy bytes from buffer to the data object
-    for (size_t i = 0; i < sizeof(T); ++i) {
+    for (size_t i = 0; i < sizeof(T); ++i)
+    {
         reinterpret_cast<uint8_t*>(&data)[i] = buffer.m_buffer[buffer.m_readPosition + i];
     }
     

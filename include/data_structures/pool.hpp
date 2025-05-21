@@ -17,6 +17,10 @@
  * Provides an efficient way to reuse objects whithout overhead and
  * frequent allocation. Objects preallocated an return to the pool after use.
  * 
+ * @note Exception handling: This class follows strict exception propagation.
+ * All exceptions are propagated to the caller after ensuring the pool remains
+ * in a consistent state.
+ * 
  * @tparam TType: Type of objects managed by the pool
  */
 
@@ -137,23 +141,41 @@ class Pool {
          * If the pool was previously initialized, all existing objects are destroyed.
          *
          * @param numberOfObjectStored Number of objects to pre-allocate
+         * @throws std::bad_alloc if memory allocation fails
          */
-        void resize(const size_t& numberOfObjectStored) {
-            // Release any existing objects
-            for (auto ptr : m_objects) {
-                delete ptr;
+        void resize(const size_t& numberOfObjectStored)
+        {
+            // Save current state to restore in case of exception
+            std::vector<TType*> oldObjects = std::move(m_objects);
+            std::vector<size_t> oldAvailable = std::move(m_available);
+            
+            try
+            {
+                // Pre-allocate space
+                m_objects.reserve(numberOfObjectStored);
+                m_available.reserve(numberOfObjectStored);
+                
+                // Create new objects
+                for (size_t i = 0; i < numberOfObjectStored; ++i)
+                {
+                    m_objects.push_back(new TType());
+                    m_available.push_back(i);
+                }
+                
+                // Success - clean up old objects
+                for (auto ptr : oldObjects)
+                {
+                    delete ptr;
+                }
             }
-            
-            m_objects.clear();
-            m_available.clear();
-            
-            // Pre-allocate objects
-            m_objects.reserve(numberOfObjectStored);
-            m_available.reserve(numberOfObjectStored);
-
-            for (size_t i = 0; i < numberOfObjectStored; ++i) {
-                m_objects.push_back(new TType());
-                m_available.push_back(i);
+            catch (...)
+            {
+                // Restore previous state if any operation fails
+                m_objects = std::move(oldObjects);
+                m_available = std::move(oldAvailable);
+                
+                // Re-throw the exception
+                throw;
             }
         }
 
@@ -168,10 +190,13 @@ class Pool {
          * @param p_args Arguments to forward to the object's constructor
          * @return Object wrapper containing the acquired object
          * @throws std::runtime_error if the pool is empty
+         * @throws Any exception thrown by TType's constructor
          */
         template<typename... TArgs>
-        Object acquire(TArgs&&... p_args) {
-            if (m_available.empty()) {
+        Object acquire(TArgs&&... p_args)
+        {
+            if (m_available.empty())
+            {
                 throw std::runtime_error("Pool is empty. Resize the pool or release objects.");
             }
 
@@ -180,12 +205,24 @@ class Pool {
             m_available.pop_back();
             TType* ptr = m_objects[index];
             
-            // Reinitialize the object in-place
-            ptr->~TType();
-            new (ptr) TType(std::forward<TArgs>(p_args)...);
+            try
+            {
+                // Reinitialize the object in-place
+                ptr->~TType();
+                new (ptr) TType(std::forward<TArgs>(p_args)...);
+            }
+            catch (...)
+            {
+                // Return the index to the pool if construction fails
+                m_available.push_back(index);
+                
+                // Re-throw the exception
+                throw;
+            }
 
             // Create release function
-            auto releaseFunc = [this, index](TType* p) {
+            auto releaseFunc = [this, index](TType* p)
+            {
                 p->~TType();
                 this->m_available.push_back(index);
             };
