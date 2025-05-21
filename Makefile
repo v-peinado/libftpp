@@ -16,7 +16,7 @@ CFLAGS	= -std=c++20 -Wall -Wextra -Werror
 RM		= rm -f
 
 #Includes
-INC		= -I ./include/
+INC		= -I ./ -I ./include/
 
 #Source files
 SRC_DIR	= src/
@@ -34,25 +34,19 @@ obj:
 
 $(OBJ_DIR)%.o: $(SRC_DIR)%.cpp | $(OBJ_DIR)
 	@$(CC) $(CFLAGS) $(INC) -c $< -o $@ 
-	@printf "$(GREEN)Compilado: $(CURSIVE)$<$(RESET)\n"
 
 $(NAME): $(OBJS)
 	@ar rcs $(NAME) $(OBJS)
-	@printf "$(GREEN)$(NAME): Biblioteca estática creada con éxito!$(RESET)\n"
+	@printf "$(GREEN)$(NAME): Static library created successfully!$(RESET)\n"
 
 clean:
 	@$(RM) -Rf $(OBJ_DIR)
-	@printf "$(YELLOW)Archivos objeto: $(RED)Eliminados!$(RESET)\n"
+	@printf "$(YELLOW)Object files: $(RED)Removed!$(RESET)\n"
 
 fclean: clean
 	@$(RM) -f $(NAME)
-	@printf "$(YELLOW)$(NAME): $(RED)Eliminado!$(RESET)\n"
+	@printf "$(YELLOW)$(NAME): $(RED)Removed!$(RESET)\n"
 
 re: fclean all
 
-test: $(NAME)
-	@$(CC) $(CFLAGS) $(INC) -o test test.cpp $(NAME)
-	@printf "$(GREEN)Programa de prueba compilado!$(RESET)\n"
-	@./test
-
-.PHONY: all re clean fclean test
+.PHONY: all re clean fclean

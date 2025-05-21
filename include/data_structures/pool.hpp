@@ -4,7 +4,7 @@
  */
 
 #ifndef POOL_HPP
-# define POLL_HPP
+# define POOL_HPP
 
 #include <vector>
 #include <functional>
