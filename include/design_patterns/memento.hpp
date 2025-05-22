@@ -18,20 +18,15 @@
  * without violating encapsulation, making it possible to restore the object to this
  * state later.
  * 
- * @note The save() and load() methods are declared as protected rather than private
- * to allow derived classes to access them. Derived classes can selectively expose
- * these methods to their clients using the 'using' directive (e.g. 'using Memento::save;').
- * This design gives derived classes control over the visibility of the state
- * management functionality.
+ * Stores the current state of an object. Must be inherited by the "saveable" class.
  */
-
 class Memento
 {
     public:
         /**
          * @brief Container for storing object state data.
          *
-         * Snapshot is a type-safe polymorphic container that can store different types
+         * Snapshot is a polymorphic container that can store different types
          * of data representing an object's state.
          */
         class Snapshot
@@ -39,8 +34,35 @@ class Memento
             private:
                 /** Container for storing different types of data */
                 std::map<std::string, std::any> m_data;
+                /** Counter for automatic key generation during serialization */
+                mutable size_t m_insertCounter;
+                /** Counter for automatic key retrieval during deserialization */
+                mutable size_t m_extractCounter;
                 
             public:
+                /**
+                 * @brief Constructor
+                 */
+                Snapshot() : m_insertCounter(0), m_extractCounter(0) {}
+                
+                /**
+                 * @brief Copy constructor 
+                 */
+                Snapshot(const Snapshot& other) 
+                    : m_data(other.m_data), m_insertCounter(other.m_insertCounter), m_extractCounter(0) {}
+                
+                /**
+                 * @brief Assignment operator
+                 */
+                Snapshot& operator=(const Snapshot& other) {
+                    if (this != &other) {
+                        m_data = other.m_data;
+                        m_insertCounter = other.m_insertCounter;
+                        m_extractCounter = 0;
+                    }
+                    return *this;
+                }
+                
                 /**
                  * @brief Stores a value of any type with the given key.
                  *
@@ -73,9 +95,30 @@ class Memento
                  * @return true if the key exists, false otherwise
                  */
                 bool hasKey(const std::string& key) const;
+                
+                /**
+                 * @brief Stream insertion operator for easy data storage.
+                 *
+                 * @tparam TType Type of the value to store
+                 * @param snapshot The snapshot to store data in
+                 * @param value The value to store
+                 * @return Reference to the snapshot for chaining
+                 */
+                template<typename TType>
+                friend Snapshot& operator<<(Snapshot& snapshot, const TType& value);
+                
+                /**
+                 * @brief Stream extraction operator for easy data retrieval.
+                 *
+                 * @tparam TType Type of the value to retrieve
+                 * @param snapshot The snapshot to extract data from
+                 * @param value Reference where the retrieved value will be stored
+                 * @return Reference to the snapshot for chaining
+                 */
+                template<typename TType>
+                friend Snapshot& operator>>(Snapshot& snapshot, TType& value);
         };
 
-    protected:
         /**
          * @brief Save the current state of the object.
          *
@@ -89,24 +132,42 @@ class Memento
          * @param snapshot The Snapshot containing the state to restore
          */
         void load(const Snapshot& snapshot);
-        
+
+    private:
         /**
          * @brief Virtual method that must be implemented by derived classes.
          *
          * Saves the object's state into the provided Snapshot.
+         * To be saved, the inheriting class must implement this method as private.
          *
          * @param snapshot The Snapshot to save state into
          */
-        virtual void saveToSnapshot(Snapshot& snapshot) const = 0;
+        virtual void _saveToSnapshot(Snapshot& snapshot) const = 0;
         
         /**
          * @brief Virtual method that must be implemented by derived classes.
          *
          * Loads the object's state from the provided Snapshot.
+         * To be saved, the inheriting class must implement this method as private.
          *
          * @param snapshot The Snapshot to load state from
          */
-        virtual void loadFromSnapshot(const Snapshot& snapshot) = 0;
+        virtual void _loadFromSnapshot(Snapshot& snapshot) = 0;
 };
+
+// Template implementations for Snapshot operators
+template<typename TType>
+Memento::Snapshot& operator<<(Memento::Snapshot& snapshot, const TType& value)
+{
+    snapshot.set(std::to_string(snapshot.m_insertCounter++), value);
+    return snapshot;
+}
+
+template<typename TType>
+Memento::Snapshot& operator>>(Memento::Snapshot& snapshot, TType& value)
+{
+    value = snapshot.get<TType>(std::to_string(snapshot.m_extractCounter++));
+    return snapshot;
+}
 
 #endif

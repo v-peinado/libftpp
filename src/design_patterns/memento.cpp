@@ -15,10 +15,10 @@ bool Memento::Snapshot::hasKey(const std::string& key) const
  * @brief Save the current state of the object.
  *
  * Creates a new Snapshot and fills it with the object's current state
- * by calling the derived class's saveToSnapshot method.
+ * by calling the derived class's _saveToSnapshot method.
  *
  * @return A Snapshot containing the object's current state
- * @throws Any exception thrown by derived class's saveToSnapshot()
+ * @throws Any exception thrown by derived class's _saveToSnapshot()
  */
 Memento::Snapshot Memento::save()
 {
@@ -26,7 +26,7 @@ Memento::Snapshot Memento::save()
     
     // Call derived class's implementation
     // Any exceptions will propagate to the caller
-    saveToSnapshot(snapshot);
+    _saveToSnapshot(snapshot);
     
     return snapshot;
 }
@@ -35,14 +35,17 @@ Memento::Snapshot Memento::save()
  * @brief Load a previously saved state.
  *
  * Restores the object's state from the provided Snapshot
- * by calling the derived class's loadFromSnapshot method.
+ * by calling the derived class's _loadFromSnapshot method.
  *
  * @param snapshot The Snapshot containing the state to restore
- * @throws Any exception thrown by derived class's loadFromSnapshot()
+ * @throws Any exception thrown by derived class's _loadFromSnapshot()
  */
 void Memento::load(const Snapshot& snapshot)
 {
+    // Create a non-const copy for the operator>>
+    Snapshot mutableSnapshot = snapshot;
+    
     // Call derived class's implementation
     // Any exceptions will propagate to the caller
-    loadFromSnapshot(snapshot);
+    _loadFromSnapshot(mutableSnapshot);
 }

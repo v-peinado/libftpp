@@ -57,7 +57,8 @@ public:
         {
             throw std::runtime_error("Singleton instance already created.");
         }
-        s_instance = std::make_unique<TType>(std::forward<TArgs>(p_args)...);
+        // Use new instead of make_unique to access private constructors
+        s_instance.reset(new TType(std::forward<TArgs>(p_args)...));
     }
 };
 
