@@ -7,15 +7,14 @@
 # define POOL_HPP
 
 #include <vector>
-#include <functional>
 #include <stdexcept>
 
 
 /**
  * @brief Generic object pool that manages reusable resources
  * 
- * Provides an efficient way to reuse objects whithout overhead and
- * frequent allocation. Objects preallocated an return to the pool after use.
+ * Provides an efficient way to reuse objects without overhead and
+ * frequent allocation. Objects preallocated and return to the pool after use.
  * 
  * @note Exception handling: This class follows strict exception propagation.
  * All exceptions are propagated to the caller after ensuring the pool remains
@@ -45,29 +44,33 @@ class Pool {
          */
         class Object {
             private:
-
                 /** Pointer to the acquired object */
                 TType* m_ptr;
                 
-                /** Function that returns the object to the pool */
-                std::function<void(TType*)> m_releaseFunc;
+                /** Pointer to the pool that owns this object */
+                Pool<TType>* m_pool;
+                
+                /** Index of this object in the pool */
+                size_t m_index;
 
             public:
-
                 /** 
                  * @brief Constructs a new Object wrapper
                  * 
-                 * @param prt Pointer to the adquiired object
-                 * @param releaseFunc Function to call when releasing the object
+                 * @param ptr Pointer to the acquired object
+                 * @param pool Pointer to the pool that owns the object
+                 * @param index Index of the object in the pool
                  */
-                Object(TType* ptr, std::function<void(TType*)> releaseFunc) : m_ptr(ptr), m_releaseFunc(releaseFunc) {}
+                Object(TType* ptr, Pool<TType>* pool, size_t index) 
+                    : m_ptr(ptr), m_pool(pool), m_index(index) {}
                
                 /**
                  * @brief Destroy the wrapper and return the object to the pool
                  */
                 ~Object() {
-                    if(m_ptr)
-                        m_releaseFunc(m_ptr);
+                    if (m_ptr && m_pool) {
+                        m_pool->returnToPool(m_index);
+                    }
                 }
 
                 // Non-copyable
@@ -79,8 +82,10 @@ class Pool {
                  * 
                  * @param other object to move from
                  */
-                Object(Object&& other) noexcept : m_ptr(other.m_ptr), m_releaseFunc(std::move(other.m_releaseFunc)) {
+                Object(Object&& other) noexcept 
+                    : m_ptr(other.m_ptr), m_pool(other.m_pool), m_index(other.m_index) {
                     other.m_ptr = nullptr;
+                    other.m_pool = nullptr;
                 }
 
                 /**
@@ -91,12 +96,19 @@ class Pool {
                  */
                 Object& operator=(Object&& other) noexcept {
                     if (this != &other) {
-                        if (m_ptr) {
-                            m_releaseFunc(m_ptr);
+                        // Return current object to pool if we have one
+                        if (m_ptr && m_pool) {
+                            m_pool->returnToPool(m_index);
                         }
+                        
+                        // Take ownership of the other object
                         m_ptr = other.m_ptr;
-                        m_releaseFunc = std::move(other.m_releaseFunc);
+                        m_pool = other.m_pool;
+                        m_index = other.m_index;
+                        
+                        // Clear the other object
                         other.m_ptr = nullptr;
+                        other.m_pool = nullptr;
                     }
                     return *this;
                 }
@@ -104,12 +116,37 @@ class Pool {
                 /**
                  * @brief Arrow operator for accessing the managed object.
                  * 
-                 * obj.getPtr()->method(); Equivalent but more verbose alternative
-                 *
                  * @return Pointer to the managed object
                  */
                 TType* operator->() {
                     return m_ptr;
+                }
+                
+                /**
+                 * @brief Dereference operator for accessing the managed object.
+                 * 
+                 * @return Reference to the managed object
+                 */
+                TType& operator*() {
+                    return *m_ptr;
+                }
+                
+                /**
+                 * @brief Get the raw pointer to the managed object.
+                 * 
+                 * @return Pointer to the managed object
+                 */
+                TType* get() {
+                    return m_ptr;
+                }
+                
+                /**
+                 * @brief Check if the object wrapper contains a valid object.
+                 * 
+                 * @return true if the wrapper contains a valid object, false otherwise
+                 */
+                bool isValid() const {
+                    return m_ptr != nullptr && m_pool != nullptr;
                 }
         };
 
@@ -220,14 +257,67 @@ class Pool {
                 throw;
             }
 
-            // Create release function
-            auto releaseFunc = [this, index](TType* p)
-            {
-                p->~TType();
-                this->m_available.push_back(index);
-            };
-
-            return Object(ptr, releaseFunc);
+            // Return Object wrapper - no lambda or std::function needed
+            return Object(ptr, this, index);
+        }
+        
+        /**
+         * @brief Returns an object to the pool by its index.
+         *
+         * This method is called automatically by Object's destructor.
+         * Should not be called directly by user code.
+         *
+         * @param index Index of the object to return to the pool
+         */
+        void returnToPool(size_t index)
+        {
+            // Add the index back to available objects
+            m_available.push_back(index);
+        }
+        
+        /**
+         * @brief Get the total number of objects in the pool.
+         *
+         * @return Total number of objects (both available and in use)
+         */
+        size_t size() const {
+            return m_objects.size();
+        }
+        
+        /**
+         * @brief Get the number of available objects in the pool.
+         *
+         * @return Number of objects currently available for acquisition
+         */
+        size_t available() const {
+            return m_available.size();
+        }
+        
+        /**
+         * @brief Get the number of objects currently in use.
+         *
+         * @return Number of objects that have been acquired but not yet returned
+         */
+        size_t inUse() const {
+            return m_objects.size() - m_available.size();
+        }
+        
+        /**
+         * @brief Check if the pool is empty (no objects available).
+         *
+         * @return true if no objects are available for acquisition
+         */
+        bool isEmpty() const {
+            return m_available.empty();
+        }
+        
+        /**
+         * @brief Check if all objects are available (none in use).
+         *
+         * @return true if all objects are available for acquisition
+         */
+        bool isFull() const {
+            return m_available.size() == m_objects.size();
         }
 };
 
