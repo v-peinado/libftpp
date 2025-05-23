@@ -14,25 +14,18 @@
  * @defgroup data_structures Data Structures
  * @brief Reusable data structure templates
  */
-
-#include "include/data_structures/data_buffer.hpp"
-#include "include/data_structures/pool.hpp"
+#include "include/data_structures.hpp"
 
 /**
  * @defgroup design_patterns Design Patterns
  * @brief Common design pattern implementations
  */
-
-#include "include/design_patterns/memento.hpp"
-#include "include/design_patterns/observer.hpp"
-#include "include/design_patterns/singleton.hpp"
-#include "include/design_patterns/state_machine.hpp"
+#include "include/design_patterns.hpp"
 
 /**
  * @defgroup iostream IOStream
  * @brief Thread-safe I/O stream utilities
  */
-
-#include "include/iostream/thread_safe_iostream.hpp"
+#include "include/iostream.hpp"
 
 #endif
