@@ -5,12 +5,6 @@
 
 #include "design_patterns/memento.hpp"
 
-// Implementation of Snapshot::hasKey
-bool Memento::Snapshot::hasKey(const std::string& key) const
-{
-    return m_data.find(key) != m_data.end();
-}
-
 /**
  * @brief Save the current state of the object.
  *
@@ -42,7 +36,7 @@ Memento::Snapshot Memento::save()
  */
 void Memento::load(const Snapshot& snapshot)
 {
-    // Create a non-const copy for the operator>>
+    // Create a non-const copy for the _loadFromSnapshot method
     Snapshot mutableSnapshot = snapshot;
     
     // Call derived class's implementation

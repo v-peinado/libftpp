@@ -17,7 +17,7 @@
  * This class manages states and transitions between them, allowing
  * custom actions to be executed when entering states or during transitions.
  *
- * @note Exception handling: All methods throw std::runtime_error for invalid
+ * @note Exception handling: All methods throw std::invalid_argument for invalid
  * operations (e.g., transitions to non-existent states). If user-provided
  * callbacks throw exceptions, they are propagated to the caller.
  *
@@ -73,7 +73,7 @@ public:
      * @param startState The starting state of the transition
      * @param finalState The ending state of the transition
      * @param lambda The action to execute during the transition
-     * @throws std::runtime_error if either state is not valid
+     * @throws std::invalid_argument if either state is not valid
      */
     void addTransition(const TState& startState, const TState& finalState, 
                        const std::function<void()>& lambda)
@@ -82,7 +82,7 @@ public:
         if (m_states.find(startState) == m_states.end() || 
             m_states.find(finalState) == m_states.end())
         {
-            throw std::runtime_error("Cannot add transition: one or both states do not exist");
+            throw std::invalid_argument("StateMachine::addTransition: One or both states not found in state registry");
         }
         
         // Add the transition
@@ -94,14 +94,14 @@ public:
      *
      * @param state The state to associate the action with
      * @param lambda The action to execute
-     * @throws std::runtime_error if the state is not valid
+     * @throws std::invalid_argument if the state is not valid
      */
     void addAction(const TState& state, const std::function<void()>& lambda)
     {
         // Verify the state exists
         if (m_states.find(state) == m_states.end())
         {
-            throw std::runtime_error("Cannot add action: state does not exist");
+            throw std::invalid_argument("StateMachine::addAction: State not found in state registry");
         }
         
         // Add the action
@@ -114,7 +114,7 @@ public:
      * Executes the transition action if one is defined.
      *
      * @param state The state to transition to
-     * @throws std::runtime_error if the target state is not valid or if no
+     * @throws std::invalid_argument if the target state is not valid or if no
      *         transition is defined from the current state to the target state
      * @throws Any exception thrown by the transition callback
      */
@@ -123,14 +123,14 @@ public:
         // Verify the state exists
         if (m_states.find(state) == m_states.end())
         {
-            throw std::runtime_error("Cannot transition: target state does not exist");
+            throw std::invalid_argument("StateMachine: Target state not found in state registry");
         }
         
         // Check if the transition exists
         auto transitionKey = std::make_pair(m_currentState, state);
         if (m_transitions.find(transitionKey) == m_transitions.end())
         {
-            throw std::runtime_error("No transition defined between current and target state");
+            throw std::invalid_argument("StateMachine: No transition handler registered for state pair");
         }
         
         TState oldState = m_currentState;
@@ -154,7 +154,7 @@ public:
     /**
      * @brief Execute the action associated with the current state.
      *
-     * @throws std::runtime_error if no action is defined for the current state
+     * @throws std::invalid_argument if no action is defined for the current state
      * @throws Any exception thrown by the action callback
      */
     void update()
@@ -162,7 +162,7 @@ public:
         // Check if an action exists for the current state
         if (m_actions.find(m_currentState) == m_actions.end())
         {
-            throw std::runtime_error("No action defined for current state");
+            throw std::invalid_argument("StateMachine: No action handler registered for current state");
         }
         
         // Execute the action

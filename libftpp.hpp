@@ -28,4 +28,11 @@
 #include "include/design_patterns/singleton.hpp"
 #include "include/design_patterns/state_machine.hpp"
 
+/**
+ * @defgroup iostream IOStream
+ * @brief Thread-safe I/O stream utilities
+ */
+
+#include "include/iostream/thread_safe_iostream.hpp"
+
 #endif

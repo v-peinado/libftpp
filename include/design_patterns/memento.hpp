@@ -6,10 +6,7 @@
 #ifndef MEMENTO_HPP
 # define MEMENTO_HPP
 
-#include <map>
-#include <string>
-#include <any>
-#include <typeindex>
+#include "data_structures/data_buffer.hpp"
 
 /**
  * @brief Implements the Memento design pattern for object state saving/restoration.
@@ -26,76 +23,16 @@ class Memento
         /**
          * @brief Container for storing object state data.
          *
-         * Snapshot is a polymorphic container that can store different types
-         * of data representing an object's state.
+         * Snapshot is a wrapper around DataBuffer that provides the polymorphic
+         * container functionality for easy state restoration.
          */
         class Snapshot
         {
             private:
-                /** Container for storing different types of data */
-                std::map<std::string, std::any> m_data;
-                /** Counter for automatic key generation during serialization */
-                mutable size_t m_insertCounter;
-                /** Counter for automatic key retrieval during deserialization */
-                mutable size_t m_extractCounter;
+                /** Internal data buffer for binary serialization */
+                DataBuffer m_buffer;
                 
             public:
-                /**
-                 * @brief Constructor
-                 */
-                Snapshot() : m_insertCounter(0), m_extractCounter(0) {}
-                
-                /**
-                 * @brief Copy constructor 
-                 */
-                Snapshot(const Snapshot& other) 
-                    : m_data(other.m_data), m_insertCounter(other.m_insertCounter), m_extractCounter(0) {}
-                
-                /**
-                 * @brief Assignment operator
-                 */
-                Snapshot& operator=(const Snapshot& other) {
-                    if (this != &other) {
-                        m_data = other.m_data;
-                        m_insertCounter = other.m_insertCounter;
-                        m_extractCounter = 0;
-                    }
-                    return *this;
-                }
-                
-                /**
-                 * @brief Stores a value of any type with the given key.
-                 *
-                 * @tparam T Type of the value to store
-                 * @param key Identifier for the stored value
-                 * @param value The value to store
-                 */
-                template<typename T>
-                void set(const std::string& key, const T& value) {
-                    m_data[key] = value;
-                }
-                
-                /**
-                 * @brief Retrieves a value by its key.
-                 *
-                 * @tparam T Expected type of the value
-                 * @param key Identifier of the value to retrieve
-                 * @return The stored value cast to type T
-                 * @throws std::bad_any_cast if the stored type doesn't match T
-                 */
-                template<typename T>
-                T get(const std::string& key) const {
-                    return std::any_cast<T>(m_data.at(key));
-                }
-                
-                /**
-                 * @brief Checks if a key exists in the snapshot.
-                 *
-                 * @param key Key to check
-                 * @return true if the key exists, false otherwise
-                 */
-                bool hasKey(const std::string& key) const;
-                
                 /**
                  * @brief Stream insertion operator for easy data storage.
                  *
@@ -159,14 +96,14 @@ class Memento
 template<typename TType>
 Memento::Snapshot& operator<<(Memento::Snapshot& snapshot, const TType& value)
 {
-    snapshot.set(std::to_string(snapshot.m_insertCounter++), value);
+    snapshot.m_buffer << value;
     return snapshot;
 }
 
 template<typename TType>
 Memento::Snapshot& operator>>(Memento::Snapshot& snapshot, TType& value)
 {
-    value = snapshot.get<TType>(std::to_string(snapshot.m_extractCounter++));
+    snapshot.m_buffer >> value;
     return snapshot;
 }
 
