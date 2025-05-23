@@ -78,6 +78,10 @@ test_data_buffer: $(TEST_BIN_DIR)/main_data_buffer
 	@printf "$(GREEN)Running Data Buffer test:$(RESET)\n"
 	@./$(TEST_BIN_DIR)/main_data_buffer
 
+test_thread_safe_iostreamr: $(TEST_BIN_DIR)/main_thread_safe_iostream
+	@printf "$(GREEN)Running test thread safe iostream test:$(RESET)\n"
+	@./$(TEST_BIN_DIR)/main_thread_safe_iostream
+
 # Run all tests
 all_tests: $(TEST_BINS)
 	@printf "$(GREEN)Running all tests:$(RESET)\n"
