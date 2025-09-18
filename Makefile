@@ -11,7 +11,7 @@ NAME	= libftpp.a
 
 #Compiler
 CC		= c++
-CFLAGS	= -std=c++20 -Wall -Wextra -Werror
+CFLAGS	= -std=c++14 -Wall -Wextra -Werror
 #CFLAGS	+= -g3 -fsanitize=address
 RM		= rm -f
 
