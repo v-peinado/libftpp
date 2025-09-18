@@ -103,9 +103,31 @@ class PoolObject
         ~PoolObject();
         PoolObject(const PoolObject& other) = delete;                   // Delete copy operations - prevents compiler-generated defaults,
         PoolObject& operator=(const PoolObject& other) = delete;        // modern alternative to C++98 private declarations
-        PoolObject(PoolObject&& other) noexcept;
+        PoolObject(PoolObject&& other) noexcept;                        // No const ref
         PoolObject& operator=(PoolObject&& other) noexcept;
-}
 
+        /* Operators for members pointers */
+
+        TType* operator->();
+        TType* operator*();
+
+        /* Getters */
+
+        TType* getPointer();
+
+        /* Methods */
+
+        bool isValid() const;
+};
+
+// ============================================
+//           POOL IMPLEMENTATIONS
+// ============================================
+
+
+
+// ============================================
+//        POOL-OBJECT IMPLEMENTATIONS
+// ============================================
 
 #endif
