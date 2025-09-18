@@ -16,7 +16,7 @@ CFLAGS	= -std=c++20 -Wall -Wextra -Werror
 RM		= rm -f
 
 #Includes
-INC		= -I ./ -I ./include/
+INC		= -I ./ -I ./inc/
 
 #Source files
 SRC_DIR	= src/
