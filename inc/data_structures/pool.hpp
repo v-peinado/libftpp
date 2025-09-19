@@ -27,13 +27,8 @@ class Pool
 {
     private:
 
-        /* Vector of pre-allocated objects */
-
-        std::vector<TType*> m_objects;
-
-        /* Index of available objects */
-
-        std::vector<size_t> m_available;
+        std::vector<TType*> m_objects;                  // Vector of pre-allocated objects
+        std::vector<size_t> m_available;                // Index of available objects
 
         /* Helper methods */
 
@@ -41,7 +36,7 @@ class Pool
 
         /* Friends class */
 
-        friend class PoolObject;       // Zero-overhead access to internals vs public getters that break encapsulation
+        friend class Object;       // Zero-overhead access to internals vs public getters that break encapsulation
         
     public:
 
@@ -52,13 +47,13 @@ class Pool
 
         /* Inner classes */
 
-        class PoolObject;
+        class Object;
 
         /* Core methods */
 
         void resize(const size_t &numberOfObjectStored);
         template<typename... TArgs>
-        PoolObject acquire(Targs&&... p_args);
+        Object acquire(Targs&&... p_args);
 
        /* Utility methods */ 
 
@@ -79,32 +74,24 @@ class Pool
  * - Prevents use-after-return and double-return errors
  */
 
-class PoolObject
+class Object
 {
     private:
 
-        /* Pointer to the acquired object */
-
-        TType* m_ptr;
-
-        /* Pointer to the pool that owns this object */
-
-        Pool<TType>* m_pool;
-
-        /* Index of this object in the pool */
-
-        size_t m_index;
+        TType* m_ptr;                     // Pointer to the acquired object
+        Pool<TType>* m_pool;              // Pointer to the pool that owns this object
+        size_t m_index;                   // Index of this object in the pool
 
     public:
 
         /* Constructors and destructors */
 
-        PoolObject(TType* ptr, Pool<TType>* pool, size_t index);
-        ~PoolObject();
-        PoolObject(const PoolObject& other) = delete;                   // Delete copy operations - prevents compiler-generated defaults,
-        PoolObject& operator=(const PoolObject& other) = delete;        // modern alternative to C++98 private declarations
-        PoolObject(PoolObject&& other) noexcept;                        // No const ref
-        PoolObject& operator=(PoolObject&& other) noexcept;
+        Object(TType* ptr, Pool<TType>* pool, size_t index);
+        ~Object();
+        Object(const Object& other) = delete;                   // Delete copy operations - prevents compiler-generated defaults,
+        Object& operator=(const Object& other) = delete;        // modern alternative to C++98 private declarations
+        Object(Object&& other) noexcept;                        // No const ref
+        Object& operator=(Object&& other) noexcept;
 
         /* Operators for members pointers */
 
@@ -124,10 +111,42 @@ class PoolObject
 //           POOL IMPLEMENTATIONS
 // ============================================
 
+Pool::~Pool()
+{
+    for(TType* ptr : m_objects)
+        delete ptr;
+}
 
+void Pool::resize(const size_t &numberOfObjectStored)
+{
+    std::vector<TType*> oldObjects = std::move(m_objects);          // Save current state to restore in case of exception
+    std::vector<size_t> oldAvailable = std::move(m_available);      // Move leaves vectors empty, transferring ownership to oldObjects/oldAvailable
+
+    try
+    {
+        m_objects.reserve(numberOfObjectStored);                    // Pre-allocate capacity to avoid multiple reallocations during push_back operations
+        m_available.reserve(numberOfObjectStored);
+
+        for (int i = 0; i < numberOfObjectStored; i++)              // Create new objects 
+        {
+            m_objects.push_back(new TType());
+            m_available.push_back(i);
+        }
+        for(auto ptr : oldObjects)                                  // Success - clean up old objects
+            delete ptr;
+
+    }
+    catch(...)
+    {
+        m_objects = std::move(oldObjects);
+        m_available = std::move(oldAvailable);
+        throw;
+    }
+    
+}
 
 // ============================================
-//        POOL-OBJECT IMPLEMENTATIONS
+//        POOL::OBJECT IMPLEMENTATIONS
 // ============================================
 
 #endif
