@@ -129,8 +129,7 @@ void Pool::resize(const size_t &numberOfObjectStored)
 
         for (int i = 0; i < numberOfObjectStored; i++)              // Create new objects 
         {
-            m_objects.push_back(new TType());
-            m_available.push_back(i);
+            m_objects.push_back(new TType());                       // () ensures proper initialization (zero for PODs [Plain Old Data: primitives/simple structs], constructor for classes)
         }
         for(auto ptr : oldObjects)                                  // Success - clean up old objects
             delete ptr;
@@ -140,7 +139,7 @@ void Pool::resize(const size_t &numberOfObjectStored)
     {
         m_objects = std::move(oldObjects);
         m_available = std::move(oldAvailable);
-        throw;
+        throw;                                                      // Propagate exception to caller after cleanup - resize failed but pool state is restored
     }
     
 }
