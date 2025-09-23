@@ -58,7 +58,7 @@ class Pool
 
         void resize(const size_t &numberOfObjectStored);
         template<typename... TArgs>
-        Object acquire(Targs&&... p_args);
+        Object acquire(TArgs&&... p_args);
 
        /* Utility methods */ 
 
@@ -79,7 +79,8 @@ class Pool
  * - Prevents use-after-return and double-return errors
  */
 
-class Object
+template<typename TType>
+class Pool<TType>::Object
 {
     private:
 
@@ -116,7 +117,8 @@ class Object
 //           POOL IMPLEMENTATIONS
 // ============================================
 
-Pool::~Pool()
+template<typename TType>
+Pool<TType>::~Pool()
 {
     for(TType* ptr : m_objects)
         delete ptr;
@@ -131,7 +133,8 @@ Pool::~Pool()
  * @param numberOfObjectStored Number of objects to pre-allocate
  * @throws std::bad_alloc if memory allocation fails
  */
-void Pool::resize(const size_t &numberOfObjectStored)
+template<typename TType>
+void Pool<TType>::resize(const size_t &numberOfObjectStored)
 {
     std::vector<TType*> oldObjects = std::move(m_objects);          // Save current state to restore in case of exception
     std::vector<size_t> oldAvailable = std::move(m_available);      // Move leaves vectors empty, transferring ownership to oldObjects/oldAvailable
@@ -141,9 +144,10 @@ void Pool::resize(const size_t &numberOfObjectStored)
         m_objects.reserve(numberOfObjectStored);                    // Pre-allocate capacity to avoid multiple reallocations during push_back operations
         m_available.reserve(numberOfObjectStored);
 
-        for (int i = 0; i < numberOfObjectStored; i++)              // Create new objects 
+        for (size_t i = 0; i < numberOfObjectStored; i++)              // Create new objects 
         {
             m_objects.push_back(new TType());                       // () ensures proper initialization (zero for PODs [Plain Old Data: primitives/simple structs], constructor for classes)
+            m_available.push_back(i);
         }
         for(auto ptr : oldObjects)                                  // Success - clean up old objects
             delete ptr;
@@ -171,13 +175,14 @@ void Pool::resize(const size_t &numberOfObjectStored)
  * @throws std::runtime_error if the pool is empty
  * @throws Any exception thrown by TType's constructor
  */
+template<typename TType>
 template<typename... TArgs>
-Object acquire(TArgs&&... p_args)
+typename Pool<TType>::Object Pool<TType>::acquire(TArgs&&... p_args)
 {
     if (m_available.empty())
         throw std::runtime_error("Pool is empty. Resize the pool or release objects.");
     
-    size_t index = m_availabe.back();
+    size_t index = m_available.back();
     m_available.pop_back();
     TType* ptr = m_objects[index];
 
@@ -205,7 +210,8 @@ Object acquire(TArgs&&... p_args)
  *
  * @param index Index of the object to return to the pool
  */
-void returnToPool(size_t index)
+template<typename TType>
+void Pool<TType>::returnToPool(size_t index)
 {
     // Add the index back to available objects
     m_available.push_back(index);
@@ -216,7 +222,8 @@ void returnToPool(size_t index)
  *
  * @return Total number of objects (both available and in use)
  */
-size_t size() const
+template<typename TType>
+size_t Pool<TType>::size() const
 {
     return m_objects.size();
 }
@@ -226,7 +233,8 @@ size_t size() const
  *
  * @return Number of objects currently available for acquisition
  */
-size_t available() const
+template<typename TType>
+size_t Pool<TType>::available() const
 {
     return m_available.size();
 }
@@ -236,7 +244,8 @@ size_t available() const
  *
  * @return Number of objects that have been acquired but not yet returned
  */
-size_t inUse() const
+template<typename TType>
+size_t Pool<TType>::inUse() const
 {
     return m_objects.size() - m_available.size();
 }
@@ -246,7 +255,8 @@ size_t inUse() const
  *
  * @return true if no objects are available for acquisition
  */
-bool isEmpty() const
+template<typename TType>
+bool Pool<TType>::isEmpty() const
 {
     return m_available.empty();
 }
@@ -256,7 +266,8 @@ bool isEmpty() const
  *
  * @return true if all objects are available for acquisition
  */
-bool isFull() const
+template<typename TType>
+bool Pool<TType>::isFull() const
 {
     return m_available.size() == m_objects.size();
 }
@@ -266,11 +277,31 @@ bool isFull() const
 // ============================================
 
 /**
+ * @brief Constructor of Object wrapper
+ */
+template<typename TType>
+Pool<TType>::Object::Object(TType* ptr, Pool<TType>* pool, size_t index)
+    : m_ptr(ptr), m_pool(pool), m_index(index)
+{
+}
+
+/**
+ * @brief Destructor - returns object to pool
+ */
+template<typename TType>
+Pool<TType>::Object::~Object()
+{
+    if (m_ptr && m_pool) {
+        m_pool->returnToPool(m_index);
+    }
+}
+/**
  * @brief Move constructor
  * 
  * @param other object to move from
  */
-Object(Object&& other) noexcept : m_ptr(other.m_ptr), m_pool(other.m_pool), m_index(other.m_index)
+template<typename TType>
+Pool<TType>::Object::Object(Object&& other) noexcept : m_ptr(other.m_ptr), m_pool(other.m_pool), m_index(other.m_index)
 {
     other.m_ptr = nullptr;
     other.m_pool = nullptr;
@@ -282,7 +313,8 @@ Object(Object&& other) noexcept : m_ptr(other.m_ptr), m_pool(other.m_pool), m_in
  * @param other object to move from
  * @return *this object
  */
-Object& operator=(Object&& other) noexcept
+template<typename TType>
+typename Pool<TType>::Object& Pool<TType>::Object::operator=(Object&& other) noexcept
 {
     if (this != &other)
     {
@@ -307,7 +339,8 @@ Object& operator=(Object&& other) noexcept
  * 
  * @return Pointer to the managed object
  */
-TType* operator->()
+template<typename TType>
+TType* Pool<TType>::Object::operator->() const
 {
     return m_ptr;
 }
@@ -317,7 +350,8 @@ TType* operator->()
  * 
  * @return Reference to the managed object
  */
-TType& operator*()
+template<typename TType>
+TType& Pool<TType>::Object::operator*() const
 {
     return *m_ptr;
 }
@@ -327,7 +361,8 @@ TType& operator*()
  * 
  * @return Pointer to the managed object
  */
-TType* get()
+template<typename TType>
+TType* Pool<TType>::Object::get() const
 {
     return m_ptr;
 }
@@ -337,7 +372,8 @@ TType* get()
  * 
  * @return true if the wrapper contains a valid object, false otherwise
  */
-bool isValid() const
+template<typename TType>
+bool Pool<TType>::Object::isValid() const
 {
     return m_ptr != nullptr && m_pool != nullptr;
 }

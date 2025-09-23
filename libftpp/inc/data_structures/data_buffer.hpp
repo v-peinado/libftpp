@@ -6,6 +6,10 @@
 #ifndef DATA_BUFFER_HPP
 # define DATA_BUFFER_HPP
 
+#include <vector>
 
+/*class DataBuffer
+{
 
+}*/
 #endif
