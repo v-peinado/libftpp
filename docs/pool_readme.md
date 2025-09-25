@@ -8,7 +8,9 @@
 - [Casos de Uso](#casos-de-uso)
 - [Resumen Técnico](#resumen-técnico)
 
-## 🎯 Introducción
+---
+
+## Introducción
 
 El **Object Pool** es un patrón de diseño que pre-alloca objetos para reutilizarlos, evitando el overhead de crear/destruir memoria constantemente. Es crítico en sistemas de alto rendimiento como game engines, servidores y trading systems.
 
@@ -29,7 +31,9 @@ for(int frame = 0; frame < 1000000; frame++) {
 }  // Return automático, sin delete
 ```
 
-## 🏗️ Arquitectura del Sistema
+---
+
+## Arquitectura del Sistema
 
 ### Estructura de Datos Core
 ```cpp
@@ -58,6 +62,7 @@ class Object {
     }
 };
 ```
+---
 
 ## 💡 Decisiones de Diseño
 
@@ -146,6 +151,8 @@ La decisión de usar **dos vectores con índices** combina tres conceptos:
 1. **Sistema de Flags Implícito**: La presencia/ausencia en `m_available` actúa como flag
 2. **Ready Queue**: `m_available` es una cola O(1) de objetos listos
 3. **Identificador Único**: El índice es una ID permanente del objeto
+
+---
 
 ## 🔄 Flujo de Ejecución
 
@@ -302,6 +309,8 @@ Object acquire(TArgs&&... args) {
 }
 ```
 
+---
+
 ## 📱 Casos de Uso
 
 ### Game Development
@@ -319,7 +328,9 @@ Pool<Connection> connectionPool(maxClients);
 Pool<Request> requestPool(maxRequests);
 ```
 
-## 🎯 Resumen Técnico
+---
+
+## Resumen Técnico
 
 El Pool implementa un patrón de reutilización de objetos mediante:
 
@@ -348,3 +359,183 @@ El diseño prioriza:
 - Todas las operaciones en O(1) (excepto inicialización)
 - Exception safety mediante RAII
 - Move semantics para el wrapper Object
+
+---
+
+## Conceptos Importantes
+
+### **RAII (Resource Acquisition Is Initialization)**
+
+**Concepto Fundamental**: Patrón donde la adquisición de un recurso está ligada a la inicialización de un objeto, y la liberación del recurso está ligada a la destrucción del objeto. El ciclo de vida del objeto controla automáticamente el ciclo de vida del recurso.
+
+**Principio Core**: El recurso se adquiere en el constructor y se libera en el destructor. Como C++ garantiza que los destructores se llaman automáticamente (incluso con excepciones), los recursos siempre se liberan correctamente.
+
+**Garantías que Proporciona**:
+- **Exception Safety**: Los destructores se ejecutan durante stack unwinding
+- **Determinístico**: Se sabe exactamente cuándo se libera el recurso
+- **Composable**: Los objetos RAII pueden contener otros objetos RAII
+- **No-leak guarantee**: Imposible tener leaks si se sigue el patrón
+
+**En el Pool**: El `Object` wrapper es RAII puro - adquiere un objeto del pool en su construcción y lo devuelve en su destrucción. El destructor siempre se ejecuta, garantizando la devolución.
+
+**Filosofía**: RAII convierte problemas de gestión de recursos en problemas de gestión de objetos. Como C++ gestiona objetos automáticamente, obtienes gestión de recursos automática.
+
+### **Strong Exception Guarantee con Rollback Semantics**
+
+**Concepto**: Garantía de que si una operación falla, el estado del sistema queda exactamente como estaba antes del intento.
+
+**El Patrón**:
+```
+1. Modificar estado
+2. try { operación peligrosa }
+3. catch { 
+    devolvemos al estado inicial
+    throw;  // re-lanzar excepción
+}
+4. Retorno (solo si no hubo excepción)
+```
+
+**En el Pool**: El `acquire()` implementa Strong Guarantee:
+- Saca el índice del stack
+- Intenta construir el objeto
+- Si falla: devuelve el índice y re-lanza
+- Si éxito: crea el wrapper Object
+
+**Importancia del `throw;`**: Re-lanzar la excepción es crucial. Sin él, la función continuaría y retornaría un Object con un puntero a memoria mal construida. El `throw;` interrumpe el flujo, previniendo la creación del wrapper RAII cuando el recurso no es válido.
+
+**Principio Fundamental**: Este patrón separa dos responsabilidades:
+1. Mantener consistencia interna (rollback del estado)
+2. Informar del error al llamador (re-throw)
+
+El sistema se auto-repara pero no oculta errores. Es transparente sobre fallos mientras mantiene integridad.
+
+---
+
+### **Rule of Five**
+
+**Concepto Fundamental**: Si una clase necesita definir cualquiera de los cinco miembros especiales (destructor, constructor de copia, operador de asignación, constructor de movimiento, operador de asignación por movimiento), probablemente necesita definir los cinco.
+
+**Principio Core**: Si tu clase gestiona recursos directamente (memoria raw, handles, etc.), necesitas controlar todas las formas en que ese recurso puede ser copiado, movido o destruido. Omitir alguno llevará a bugs sutiles.
+
+**Los Cinco Miembros**:
+1. **Destructor**: Libera recursos
+2. **Constructor de copia**: Duplica recursos
+3. **Operador de asignación**: Libera antiguos, duplica nuevos
+4. **Constructor de movimiento**: Transfiere ownership
+5. **Operador de asignación por movimiento**: Libera antiguos, transfiere nuevos
+
+**En el Pool**: El `Object` wrapper implementa una variante - define destructor y movimiento pero **elimina** copia (porque no tiene sentido tener dos wrappers para el mismo objeto del pool). Es "Rule of Five consciente" - considera los cinco pero solo implementa los que tienen sentido semánticamente.
+
+**Señal de Alerta**: Si escribes un destructor custom, PARA y piensa en los otros cuatro. El compilador generará versiones por defecto que probablemente están mal para tu caso.
+
+---
+
+### **Rule of Zero**
+
+**Concepto Fundamental**: Las clases deberían gestionar cero recursos directamente. Usa tipos que ya siguen RAII (smart pointers, containers STL) y deja que el compilador genere los cinco miembros especiales automáticamente.
+
+**Principio Core**: Delega la gestión de recursos a clases dedicadas. Tu clase de lógica de negocio no debería preocuparse por gestión de memoria - eso es trabajo de `unique_ptr`, `vector`, etc.
+
+**La Regla**: Si puedes evitar escribir cualquiera de los cinco miembros especiales, evítalos todos. Los defaults del compilador serán correctos si todos tus miembros son RAII-compliant.
+
+**Beneficios**:
+- Menos código que mantener
+- Menos bugs (los defaults son correctos)
+- Automáticamente exception-safe
+- Automáticamente move-enabled
+
+**En el Pool**: La clase `Pool` principal sigue Rule of Zero - usa `vector` para gestionar memoria, no define ningún member especial. Los vectors se encargan de todo. Solo el `Object` wrapper necesita Rule of Five porque gestiona el "recurso" abstracto de "objeto prestado del pool".
+
+**Filosofía**: Es una jerarquía - las clases de bajo nivel (como `unique_ptr`) siguen Rule of Five, las clases de alto nivel siguen Rule of Zero usando las de bajo nivel. No todas las clases deberían gestionar recursos - la mayoría deberían solo usar gestores existentes.
+
+---
+
+### **Separación Declaración-Implementación en Templates**
+
+**Concepto Fundamental**: Cuando separas la implementación de la declaración en templates (especialmente con clases anidadas), la sintaxis se vuelve verbosa y compleja debido a que debes especificar completamente el scope y todos los parámetros de template.
+
+**Desglose de la Sintaxis Más Compleja**:
+
+```cpp
+template<typename TType>                    // 1. Template de la clase contenedora
+template<typename... TArgs>                 // 2. Template del método
+typename Pool<TType>::Object                // 3. Tipo de retorno (necesita typename)
+Pool<TType>::                              // 4. Scope de la clase
+acquire(TArgs&&... p_args)                 // 5. Nombre del método y parámetros
+```
+
+**Por qué cada parte:**
+
+1. **`template<typename TType>`** - Le dice al compilador "esto es parte de una clase template con parámetro TType"
+
+2. **`template<typename... TArgs>`** - El método tiene sus propios templates (variadic en este caso)
+
+3. **`typename Pool<TType>::Object`** - El retorno es un tipo anidado:
+   - `typename` porque `Object` depende de `TType` 
+   - Sin `typename`, el compilador no sabe si `Object` es tipo o variable
+   - `Pool<TType>::` especifica de dónde viene `Object`
+
+4. **`Pool<TType>::`** - Scope completo indicando que `acquire` pertenece a `Pool<TType>`
+
+5. **`acquire(TArgs&&... p_args)`** - Finalmente el método con forwarding references
+
+**Evolución de Complejidad**:
+
+```cpp
+// NIVEL 1: Método simple
+// Dentro:  void clear();
+// Fuera:   
+template<typename T>
+void Pool<T>::clear() { }
+
+// NIVEL 2: Retorna tipo anidado
+// Dentro:  Object get();
+// Fuera:   
+template<typename T>
+typename Pool<T>::Object    // typename necesario
+Pool<T>::get() { }
+
+// NIVEL 3: Método de clase anidada
+// Dentro de Object:  void reset();
+// Fuera:
+template<typename T>
+void Pool<T>::Object::       // Doble scope resolution
+reset() { }
+
+// NIVEL 4: Constructor de clase anidada con inicializadores
+// Dentro:  Object(TType* ptr);
+// Fuera:
+template<typename T>
+Pool<T>::Object::            // No typename en constructores
+Object(T* ptr) : m_ptr(ptr) { }
+
+// NIVEL 5: La bestia - template de template con tipo dependiente
+template<typename TType>
+template<typename... TArgs>
+typename Pool<TType>::Object 
+Pool<TType>::acquire(TArgs&&... p_args) { }
+```
+
+**Reglas Clave**:
+
+1. **`typename`** necesario cuando:
+   - El tipo depende de un template parameter
+   - Está dentro de un scope dependiente (`Pool<T>::`)
+   - NO en constructores/destructores
+
+2. **Orden de templates**:
+   - Primero el de la clase
+   - Luego el del método
+   - No puedes combinarlos en uno
+
+3. **Scope resolution (`::`)**: 
+   - Debes especificar la ruta completa
+   - `Pool<T>::Object::metodo` para métodos de clase anidada
+
+**Por Qué Esta Complejidad Existe**:
+
+- Los templates se compilan cuando se usan, no cuando se definen, es decir, si se usase la misma template con dos tipos diferentes se compilarian 2 funciones, si se usasen 0 tipos se compilarian 0 funciones.
+- El compilador necesita distinguir entre tipos y valores
+- Existe una dependencia de tipos `Object` solo si `Pool<T>` se instancia con un `T` específico
+
+
