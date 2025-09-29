@@ -538,4 +538,225 @@ Pool<TType>::acquire(TArgs&&... p_args) { }
 - El compilador necesita distinguir entre tipos y valores
 - Existe una dependencia de tipos `Object` solo si `Pool<T>` se instancia con un `T` específico
 
+---
 
+### **Perfect Forwarding**
+
+**Concepto Fundamental**: Técnica para preservar la categoría de valor (lvalue/rvalue) al reenviar argumentos. Resuelve el problema de que todo lo que tiene nombre dentro de una función se convierte en lvalue. Perfect forwarding permite que una función template actúe como un "proxy transparente" que preserva la naturaleza original de los argumentos, manteniendo las optimizaciones de move semantics cuando corresponde.
+
+**Teoría Base - Lvalue vs Rvalue**:
+
+*Origen de los nombres*: lvalue viene de "left value" (puede aparecer a la izquierda de una asignación), rvalue de "right value" (solo puede aparecer a la derecha). 
+
+*Definición formal*: Un lvalue tiene dirección en memoria y persiste más allá de la expresión. Un rvalue es temporal, no tiene dirección accesible y desaparece tras la expresión.
+
+```cpp
+int x = 5;      // x es lvalue (tiene dirección)
+int* p = &x;    // ✅ Puedes tomar su dirección
+x = 20;         // ✅ Puede estar a la izquierda del =
+
+int* p2 = &10;  // ❌ ERROR - 10 es rvalue (temporal)
+10 = x;         // ❌ ERROR - rvalue no puede estar a la izquierda
+```
+
+**El Problema Core - "Si Tiene Nombre, es Lvalue"**:
+
+*Teoría*: C++ tiene una regla fundamental - cualquier expresión que tenga nombre es tratada como lvalue dentro del ámbito donde existe ese nombre, sin importar cómo fue pasada originalmente. Esto es porque si algo tiene nombre, potencialmente puede ser usado múltiples veces, por lo que el compilador debe tratarlo como algo que persiste.
+
+*Implicación*: Cuando una función recibe un parámetro (incluso por rvalue reference), ese parámetro tiene un nombre dentro de la función, por lo tanto se convierte en lvalue. Esto "rompe" la cadena de move semantics.
+
+```cpp
+void needs_rvalue(vector<int>&& v) {  // Solo acepta rvalues
+    data = std::move(v);              // Para mover
+}
+
+template<typename T>
+void wrapper(T&& arg) {  // Universal ref - acepta todo
+    // PROBLEMA: arg tiene nombre = es lvalue
+    needs_rvalue(arg);    // ❌ ERROR! arg es lvalue
+}
+
+vector<int> vec(1000);
+wrapper(std::move(vec));  // Pasas rvalue pero se "pierde"
+```
+
+**Universal/Forwarding References - Teoría de Deducción**:
+
+*Concepto*: `T&&` en un contexto donde T es deducido NO es una rvalue reference normal. Es una "universal reference" que puede ligarse tanto a lvalues como rvalues mediante un mecanismo especial de deducción de tipos.
+
+*Mecanismo de deducción*:
+- Cuando pasas un lvalue de tipo U, T se deduce como U& (referencia)
+- Cuando pasas un rvalue de tipo U, T se deduce como U (no referencia)
+
+*Reference Collapsing*: C++ no permite referencias a referencias (`int& &`), por lo que aplica reglas de colapso. La regla fundamental es que "lvalue reference es contagioso" - cualquier combinación con & resulta en &, excepto && && que da &&.
+
+```cpp
+template<typename T>
+void func(T&& param);  // Universal reference
+
+// Deducción con lvalue:
+int x;
+func(x);  // T = int&, T&& = int& && = int& (colapso)
+
+// Deducción con rvalue:
+func(42); // T = int, T&& = int&&
+
+// Tabla completa de colapso:
+// & &   → &   (lvalue + lvalue = lvalue)
+// & &&  → &   (lvalue "contagia")
+// && &  → &   (lvalue "contagia")  
+// && && → &&  (solo rvalue + rvalue = rvalue)
+```
+
+**`std::forward` - Mecanismo Interno**:
+
+*Teoría*: `std::forward` no es magia - es un conditional cast que usa la información de tipo deducida para restaurar la categoría original. Su ÚNICO propósito es contrarrestar el efecto de "si tiene nombre, es lvalue".
+
+*Funcionamiento*:
+- Si T fue deducido con &, forward devuelve lvalue reference
+- Si T fue deducido sin &, forward devuelve rvalue reference
+
+```cpp
+// Implementación conceptual simplificada:
+template<typename T>
+T&& forward(typename remove_reference<T>::type& arg) {
+    return static_cast<T&&>(arg);
+}
+
+// Si T = int& → cast a int& && → int& (preserva lvalue)
+// Si T = int  → cast a int&&    → int&& (restaura rvalue)
+```
+
+*Diferencia crítica con `std::move`*:
+- `std::move` SIEMPRE convierte a rvalue (incondicional)
+- `std::forward` restaura la categoría ORIGINAL (condicional basado en T)
+- `std::move` es un cast incondicional: `static_cast<T&&>(x)`
+- `std::forward` es un cast condicional basado en la deducción
+
+**Por Qué Copiar un Rvalue es Ineficiente - Teoría**:
+
+*El problema conceptual*: Un rvalue representa un objeto temporal que va a ser destruido. Copiar implica:
+1. Reservar nueva memoria (malloc/new)
+2. Copiar elemento por elemento (O(n))
+3. Mantener ambas copias hasta que el temporal se destruya
+
+*La oportunidad perdida*: Como el rvalue va a desaparecer, duplicar sus recursos es trabajo innecesario. Podríamos simplemente "robar" sus recursos (transferir ownership) en O(1).
+
+```cpp
+// Sin perfect forwarding:
+vector<int> create_vector() { return vector<int>(1000000); }
+void process(vector<int> v) { /* usa v */ }
+
+process(create_vector()); 
+// El temporal se COPIA innecesariamente (50ms)
+// cuando podría MOVERSE (0.001ms)
+```
+
+**Perfect Forwarding Completo - Combinación de Conceptos**:
+
+*Teoría unificada*: Perfect forwarding combina tres mecanismos:
+1. **Variadic templates** (`...`) para aceptar cualquier número de argumentos
+2. **Universal references** (`T&&`) para aceptar lvalues y rvalues
+3. **`std::forward`** para restaurar las categorías originales
+
+```cpp
+template<typename... TArgs>
+void perfect_wrapper(TArgs&&... args) {
+    // TArgs&&... → universal ref para cada argumento
+    // forward<TArgs>... → restaura cada categoría
+    real_function(std::forward<TArgs>(args)...);
+}
+```
+
+**En el Pool - Aplicación de la Teoría**:
+
+*El problema sin perfect forwarding*: Todos los argumentos llegarían como lvalues al constructor, forzando copias incluso cuando el usuario intentó mover.
+
+*La solución con perfect forwarding*: El Pool actúa como proxy transparente preservando la intención del usuario.
+
+```cpp
+template<typename... TArgs>
+typename Pool<TType>::Object acquire(TArgs&&... p_args) {
+    if (m_available.empty()) {
+        throw std::runtime_error("Pool is empty");
+    }
+
+    size_t index = m_available.back();
+    m_available.pop_back();
+    TType* ptr = m_objects[index];
+    
+    try {
+        ptr->~TType();  // Destructor explícito
+        
+        // Placement new: construye en memoria existente
+        // forward preserva si cada arg es lvalue o rvalue
+        new (ptr) TType(std::forward<TArgs>(p_args)...);
+    }
+    catch (...) {
+        m_available.push_back(index);
+        throw;
+    }
+
+    return Object(ptr, this, index);
+}
+```
+
+**Placement New y Perfect Forwarding**:
+
+*Teoría*: Placement new (`new (ptr) T(...)`) construye un objeto en memoria ya asignada. No asigna memoria, solo llama al constructor. Cuando se combina con perfect forwarding, permite que el constructor reciba los argumentos con sus categorías originales preservadas.
+
+```cpp
+void* buffer = operator new(sizeof(T));  // Solo reserva memoria
+new (buffer) T(std::forward<Args>(args)...);  // Construye con categorías preservadas
+```
+
+**Pool::Object - Move Semantics**:
+
+*Teoría de move operations*: Move semantics no copia datos, transfiere ownership. El objeto origen queda en un "valid but unspecified state" - puede ser destruido o reasignado, pero no debe asumirse su contenido.
+
+```cpp
+class Object {
+    // Move constructor - transferencia de ownership
+    Object(Object&& other) noexcept 
+        : m_ptr(other.m_ptr), 
+          m_pool(other.m_pool), 
+          m_index(other.m_index) {
+        other.m_ptr = nullptr;   // Estado válido pero vacío
+        other.m_pool = nullptr;
+    }
+    
+    // Move assignment - con cleanup del estado anterior
+    Object& operator=(Object&& other) noexcept {
+        if (this != &other) {
+            if (m_ptr && m_pool) {
+                m_pool->returnToPool(m_index);  // Limpieza
+            }
+            
+            // Transferencia O(1) - solo punteros
+            m_ptr = other.m_ptr;
+            m_pool = other.m_pool;
+            m_index = other.m_index;
+            
+            // Estado válido pero vacío
+            other.m_ptr = nullptr;
+            other.m_pool = nullptr;
+        }
+        return *this;
+    }
+};
+```
+
+**Importancia del noexcept**:
+
+*Teoría*: Los contenedores STL tienen que elegir entre move y copy durante operaciones como `vector::resize()`. Si el move constructor no es `noexcept`, el contenedor podría elegir copiar para mantener la garantía de excepción fuerte. Marcar como `noexcept` garantiza que se usará move.
+
+**Por Qué es Crucial**: 
+
+*Impacto en performance*: La diferencia entre copiar y mover puede ser de órdenes de magnitud. Para un vector de 1M elementos:
+- Copy: O(n) - duplicar 4MB, ~50ms
+- Move: O(1) - transferir 3 punteros, ~0.001ms
+- Diferencia: 50,000x
+
+*Impacto en diseño*: Sin perfect forwarding, las abstracciones tienen un coste. Con perfect forwarding, una función wrapper puede ser verdaderamente zero-cost, preservando toda la eficiencia del código directo.
+
+**Regla de Oro**: Usa perfect forwarding (`T&&` + `std::forward<T>`) cuando escribas una función template que solo reenvía argumentos sin procesarlos. Es la única forma de mantener un abstracción zero-cost que preserve las optimizaciones de move semantics.
