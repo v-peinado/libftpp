@@ -280,8 +280,7 @@ bool Pool<TType>::isFull() const
  * @brief Constructor of Object wrapper
  */
 template<typename TType>
-Pool<TType>::Object::Object(TType* ptr, Pool<TType>* pool, size_t index)
-    : m_ptr(ptr), m_pool(pool), m_index(index)
+Pool<TType>::Object::Object(TType* ptr, Pool<TType>* pool, size_t index) : m_ptr(ptr), m_pool(pool), m_index(index)
 {
 }
 
@@ -318,7 +317,7 @@ typename Pool<TType>::Object& Pool<TType>::Object::operator=(Object&& other) noe
 {
     if (this != &other)
     {
-        // Return current object to pool if we have one
+        // Return current object to pool if we have one, devolvemos el antiguo al
         if (m_ptr && m_pool)
             m_pool->returnToPool(m_index);
         
