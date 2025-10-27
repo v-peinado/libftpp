@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <limits>
 
+
+
 // Constructor
 DataBuffer::DataBuffer() : m_readPosition(0) 
 {
@@ -15,9 +17,7 @@ DataBuffer::DataBuffer() : m_readPosition(0)
 }
 
 // Move constructor
-DataBuffer::DataBuffer(DataBuffer&& other) noexcept
-    : m_buffer(std::move(other.m_buffer))
-    , m_readPosition(other.m_readPosition)
+DataBuffer::DataBuffer(DataBuffer&& other) noexcept : m_buffer(std::move(other.m_buffer)), m_readPosition(other.m_readPosition)
 {
     other.m_readPosition = 0;
 }
@@ -25,7 +25,8 @@ DataBuffer::DataBuffer(DataBuffer&& other) noexcept
 // Move assignment operator
 DataBuffer& DataBuffer::operator=(DataBuffer&& other) noexcept
 {
-    if (this != &other) {
+    if (this != &other)
+    {
         m_buffer = std::move(other.m_buffer);
         m_readPosition = other.m_readPosition;
         other.m_readPosition = 0;
@@ -72,7 +73,8 @@ template<>
 DataBuffer& operator<<(DataBuffer& buffer, const std::string& data)
 {
     // Validate string size fits in uint32_t
-    if (data.size() > std::numeric_limits<uint32_t>::max()) {
+    if (data.size() > std::numeric_limits<uint32_t>::max())
+    {
         throw std::length_error("String too large for serialization");
     }
     
@@ -81,7 +83,8 @@ DataBuffer& operator<<(DataBuffer& buffer, const std::string& data)
     buffer << length;
     
     // Reserve space for efficiency
-    if (!data.empty()) {
+    if (!data.empty())
+    {
         buffer.reserve(buffer.size() + data.size());
         
         // Store string data efficiently
@@ -104,7 +107,8 @@ DataBuffer& operator>>(DataBuffer& buffer, std::string& data)
     buffer >> length;
     
     // Validate buffer has enough data
-    if (buffer.getBytesRemaining() < length) {
+    if (buffer.getBytesRemaining() < length) 
+    {
         throw std::runtime_error(
             "DataBuffer underflow: string requires " + std::to_string(length) + 
             " bytes, only " + std::to_string(buffer.getBytesRemaining()) + " bytes available"
@@ -114,7 +118,8 @@ DataBuffer& operator>>(DataBuffer& buffer, std::string& data)
     // Extract string data
     data.clear();
     
-    if (length > 0) {
+    if (length > 0)
+    {
         data.reserve(length);
         
         // Direct assignment for efficiency

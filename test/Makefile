@@ -9,6 +9,7 @@ BLUE   = \033[34m
 # Compiler settings
 CC      = c++
 CFLAGS  = -Wall -Wextra -Werror -std=c++14
+CFLAGS += -g3 -fsanitize=address -fsanitize=leak -fsanitize=undefined
 RM      = rm -f
 
 # Paths

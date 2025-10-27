@@ -25,110 +25,43 @@
  */
 class DataBuffer
 {
-private:
-    /** Internal byte buffer */
-    std::vector<uint8_t> m_buffer;
-    
-    /** Current read position for extraction operations */
-    size_t m_readPosition;
+    private:
+        
+        std::vector<uint8_t> m_buffer;      // Internal byte buffer
+        size_t m_readPosition;              // Current read position for extraction operations
 
-public:
-    /**
-     * @brief Default constructor.
-     *
-     * Creates an empty buffer with read position at the beginning.
-     */
-    DataBuffer();
-    
-    /**
-     * @brief Move constructor for efficient buffer transfers.
-     * @param other Buffer to move from
-     */
-    DataBuffer(DataBuffer&& other) noexcept;
-    
-    /**
-     * @brief Move assignment operator.
-     * @param other Buffer to move from
-     * @return Reference to this buffer
-     */
-    DataBuffer& operator=(DataBuffer&& other) noexcept;
-    
-    /**
-     * @brief Copy constructor.
-     */
-    DataBuffer(const DataBuffer&) = default;
-    
-    /**
-     * @brief Copy assignment operator.
-     */
-    DataBuffer& operator=(const DataBuffer&) = default;
-    
-    /**
-     * @brief Destructor.
-     */
-    ~DataBuffer();
-    
-    /**
-     * @brief Clears the buffer and resets read position.
-     */
-    void clear();
-    
-    /**
-     * @brief Returns the current size of the buffer.
-     * @return Size of the buffer in bytes
-     */
-    size_t size() const;
-    
-    /**
-     * @brief Returns a pointer to the raw buffer data.
-     * @return Const pointer to the internal buffer
-     */
-    const uint8_t* data() const;
-    
-    /**
-     * @brief Reserve capacity to avoid reallocations.
-     * @param capacity Number of bytes to reserve
-     */
-    void reserve(size_t capacity);
-    
-    /**
-     * @brief Get remaining bytes available for reading.
-     * @return Number of bytes that can still be read
-     */
-    size_t getBytesRemaining() const;
-    
-    /**
-     * @brief Serialization operator for storing objects in the buffer.
-     *
-     * Converts an object to its byte representation and appends it to the buffer.
-     * Uses direct memory representation for trivial types.
-     *
-     * @tparam T Type of object to serialize
-     * @param buffer Buffer to store the object in
-     * @param data Object to serialize
-     * @return Reference to the buffer for operator chaining
-     * @throws std::bad_alloc if memory allocation fails
-     */
-    template<typename T>
-    friend DataBuffer& operator<<(DataBuffer& buffer, const T& data);
-    
-    /**
-     * @brief Deserialization operator for retrieving objects from the buffer.
-     *
-     * Extracts an object from the buffer at the current read position.
-     * The read position is advanced by the size of the extracted object.
-     *
-     * @tparam T Type of object to deserialize
-     * @param buffer Buffer to extract the object from
-     * @param data Object where the deserialized data will be stored
-     * @return Reference to the buffer for operator chaining
-     * @throws std::runtime_error if there is not enough data in the buffer
-     */
-    template<typename T>
-    friend DataBuffer& operator>>(DataBuffer& buffer, T& data);
+    public:
+
+        /* Constructors and destructors */
+
+        DataBuffer();
+        ~DataBuffer();
+
+        DataBuffer(DataBuffer&& other) noexcept;
+        DataBuffer& operator=(DataBuffer&& other) noexcept;
+        DataBuffer(const DataBuffer&) = default;
+        DataBuffer& operator=(const DataBuffer&) = default;
+        
+        /* Utility methods */ 
+
+        void clear();
+        size_t size() const;
+        const uint8_t* data() const;
+        void reserve(size_t capacity);
+        size_t getBytesRemaining() const;
+        
+        /* Core methods */
+
+        template<typename T>
+        friend DataBuffer& operator<<(DataBuffer& buffer, const T& data);
+        
+        template<typename T>
+        friend DataBuffer& operator>>(DataBuffer& buffer, T& data);
 };
 
-// Template implementations must be in the header file
+// ============================================
+//           DATABUFFER IMPLEMENTATIONS
+// ============================================
 
 template<typename T>
 DataBuffer& operator<<(DataBuffer& buffer, const T& data)
@@ -137,7 +70,8 @@ DataBuffer& operator<<(DataBuffer& buffer, const T& data)
     const uint8_t* bytePtr = reinterpret_cast<const uint8_t*>(&data);
     
     // Reserve space if needed to avoid multiple reallocations
-    if (buffer.m_buffer.capacity() < buffer.m_buffer.size() + sizeof(T)) {
+    if (buffer.m_buffer.capacity() < buffer.m_buffer.size() + sizeof(T))
+    {
         buffer.m_buffer.reserve(buffer.m_buffer.size() + sizeof(T));
     }
     
@@ -151,7 +85,8 @@ template<typename T>
 DataBuffer& operator>>(DataBuffer& buffer, T& data)
 {
     // Check if there's enough data in the buffer
-    if (buffer.m_readPosition + sizeof(T) > buffer.m_buffer.size()) {
+    if (buffer.m_readPosition + sizeof(T) > buffer.m_buffer.size())
+    {
         throw std::runtime_error(
             "DataBuffer underflow: attempted to read " + std::to_string(sizeof(T)) + 
             " bytes, only " + std::to_string(buffer.getBytesRemaining()) + " bytes available"
@@ -167,7 +102,8 @@ DataBuffer& operator>>(DataBuffer& buffer, T& data)
     return buffer;
 }
 
-// Declare specializations for std::string
+// Declare specializations for std::string, al ser una implementacion completa, se implementa en .cpp
+// Es necesario esta distincion porque std::string tiene puntero interno, si se serializa se serializaria la direccion de memoria no el contenido
 template<>
 DataBuffer& operator<<(DataBuffer& buffer, const std::string& data);
 
